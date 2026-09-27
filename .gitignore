@@ -1,0 +1,19 @@
+# Real configuration, including paths to credential files. Never commit.
+.env
+
+# Virtual environments and bytecode
+.venv/
+__pycache__/
+*.pyc
+
+# Pipeline output: raw snapshots, candidates, watchlists, trader status.
+data/
+
+# Keys, if one is ever dropped into the tree by mistake.
+*.pem
+*private-key*
+
+# Editor and OS junk
+.cursor/
+Thumbs.db
+desktop.ini

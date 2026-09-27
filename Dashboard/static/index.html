@@ -1,0 +1,338 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>//Kalshi Dutch Book Arbitrage</title>
+  <!-- Cascadia Code comes from jsDelivr, the same face the Quant Dashboard uses.
+       Everything else on this page is a local asset. -->
+  <link rel="preconnect" href="https://cdn.jsdelivr.net" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fontsource/cascadia-code@5/400.css" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fontsource/cascadia-code@5/700.css" />
+  <link rel="stylesheet" href="/static/styles.css">
+</head>
+<body>
+  <div class="bg-grid"></div>
+  <header class="topbar">
+    <h1>//Kalshi Dutch Book Arbitrage</h1>
+    <div class="run-picker">
+      <label for="run-select">Run</label>
+      <select id="run-select" aria-label="Run file"></select>
+    </div>
+    <div class="cycle-controls" id="cycle-controls" hidden>
+      <span id="cycle-status"></span>
+    </div>
+    <span class="spacer"></span>
+    <span class="cursor" aria-hidden="true"></span>
+  </header>
+
+  <p id="error-bar" class="bar error" hidden></p>
+  <p id="demo-bar" class="bar warn" hidden>
+    Demo environment: demo order books are synthetic, so the liquidity gates
+    (volume, open interest, executable routes) and every edge figure below are
+    meaningless here.
+  </p>
+  <p id="stale-bar" class="bar warn" hidden></p>
+
+  <section id="empty-state" class="empty" hidden>
+    <h2>No candidate files found</h2>
+    <p>Nothing to show yet. Leave the dashboard running for the next cycle, or in the pipeline folder (<code>Core</code>) run:</p>
+    <pre>python collect.py
+python filter_candidates.py
+python enrich_sizes.py
+python score.py</pre>
+    <p>
+      Then refresh this page &mdash; no server restart needed. Reading from
+      <code id="empty-dir"></code>
+    </p>
+  </section>
+
+  <main id="run-view" hidden>
+    <div class="columns">
+      <div class="col-left">
+      <section class="panel">
+        <h2>Funnel</h2>
+        <table class="funnel">
+          <thead>
+            <tr>
+              <th>gate</th>
+              <th class="num">surviving</th>
+              <th class="num">delta</th>
+              <th class="bar-col"></th>
+            </tr>
+          </thead>
+          <tbody id="funnel-body"></tbody>
+        </table>
+      </section>
+      <div class="ascii-slot">
+        <div class="ascii-stage">
+        <pre class="ascii-art" aria-hidden="true">                                                                .:++-.
+                                                               .=#****=.
+                                                              .+##******+:                  .....:--:.
+                                                             .+###********+:              .+*********+:
+                                                            .+####*#********=.          .=******#**##**-.
+                                                            =######**##*#****+:       :+##*****#**#####*=.
+                                                           :*#######*#*********-.   .-*######****#######*=.              :+**-.
+                                .*****+-:.                .+############**##**#*=. .=########**##########*-.         ..=*****+:
+                                :##*******+=:       ....  :*#############**#####*+.+######################*:      .=********#*:
+                                -####*********=:. -####**-=###########################################%####=.  .:+**********#*:
+                                =######**#*******=*########################################################*:..+**********###*-.
+                                =########*********##########################################################+***********#####*-.
+                                =##########**##***#########################################################************#######=.
+                                -#############***####################*#######################*############***********#########=.
+                                :*#############**###########################################**##############********#########*-.
+                                .+#############***##########################################################*******##########*=.
+                               .################**#######################################################%%##*******####*#######:
+                               :###########*####**#####################%%%##########%%######################********##*#########:
+                               .*#################################****#%%%%####***#%%%#**###################****##**###########*:
+                                =###############**###########*#%%%#*****%%%###****####*#%%#****#*###########******#############*.
+                                :*###############**##########***#%%#****#####*****#######********##%%#######********##########*=.        ...::--=====-.
+          ....::::....           =##########################******###****###**###*#**####*++****#%%#***#####**********########*:   ..::-===+++++++++++=.
+       .-**######******+=:...    .+###############**#%#########***###***%#****###******#****++*#%%#****#####******##########*#=::-===++++++++++***####=.
+       -*********************+-:..:***#########*****###########%#**#**++###****##**********#*+*###*****####********########***+=+++++++++*******#####*+---:::..
+       .=######******************+==***########******#####******###***++##*********+******##++*##*+++*#%%%%#*********######**+++++++++++***********************=.
+        :+########********************######*******###%%%%##*****###**+************#******##++*****+*#%%###*####******######*+++++++***********************#####:
+         .+*#########*****************#**##*******#####**####*++***##**********+++****++***#*+***##**##****#####*******####*+++++++******************########%#=
+          .=*#################*********#*##*******######****#*++*****###**+****++++***+********#%##*+#*****#####************++++*******************########%%#=.
+      .....:=*####################********##*******######*****+*#*********+++++++**++*********##****#%%%%%######******#****++++******************########%%##=
+     :-------=**#####**###########**************++**#######%#*++***#**++*++**+++***++++**++*######*#%#*+++*#####++********++++****************###########%##=.
+    .-==++++===+**####**##########**************+++*#######+*##***##*****+++++++++++*+=+***#########**+=+*#####*+++******++++++++++***********############*=.
+     .=+*****+++++**###**##########************+++++########**###*****+++++++++*+==++++****#####%##***=+*######+++*****++++++++**************############*-.
+     .:+**************##**#########**************++++*#*##*##*#%###**##*+++++=++++++++**########***#*+=*######*+++*****++++++*######********###########*+:
+      .:+***************#***######************+***++++***##############*#***###***+++*###########**#*+*######*+++****+**+++**########******##########**-.
+       .:=************++*******#*#*************++**++++**#######*########*###**#****##############***#####***+++++++++++*****#######*********######**=:
+         :=****##*******++*******************+*+++++++++*#######**##########################%%#########*****+=+++++++++*****######**********#####**+:
+          .-+*************+++****************+++++++++=++*#####***########################%%############***+==+++++++++++**######*********####***+-.
+           .:=******###*****+++**********#####**+++++++==****###***############**#***#########**#######**++==++=+++++++**########*************++-.
+             .:=*****#********+++*******######***+++++++=++********##############***###########*#######*++=====++++++**#######***************+-.
+               .:+***************+++****#######****++*++===+*********#####******##############**#######*+=-===+++++**####*****************+=:.
+                 .:=+***************+++*******#####**++++===++********###*******##############**#####**+=-===+==+*####************+*****+=:
+             ..:--==+*************##**+++*****########**+++==++++**************####**########***#####*+=-=====+******#********++++++++++-.
+       ..-=++**********************++**++*****############*++==++++++++****+******#**#######*********+======+***************++++++++=::..
+     :=*******************************+++**********##########*+===+++++++++++**************#********+=====+***************+++++++-:..
+   :+*******************************+*++++++*******######**#####**+====++++++++*******************+++===++*************+++++++=-::::....
+ .+********************************+*+++++++++**************###*##**++======++++++**+********+**+++===+*++++********+++++===--------------:::...
+.+*#*##########***********************++++++++++***********************+=========+++++++****+++++===+++++++++++++++++++====-----------------------:..
+.=#################********************++++++++++++++*************+**+++*+===++++++++++++++++++====++++++++++++++============----=-==================--:..
+ .:+*##################***************+++++++++++++++++++**+++*****####################*****++===+====++=+++++============================================-:.
+    .-+***#############*#*******************+++++++++++++++****#*******################*****+==============================================++++++++++++++++==-:.
+      ..:=*************************************++++++++++++**************##############****+-----============+++++++++*+++============++++++++++++++++++++++++==-:
+          ..:=+*******************************++****+++++++++*************############****+===--=============++++++++*****++++++++++++++++++++++++**********++*++=-:
+               ...-=+**********************+++***+++++++++++++++*************####*******+=================+++++++++*****#**+++++++++++++++++*********************++-.
+                     ....:-=+++++++++++++++++****++++++++++=---=++********************+====================+++++++*****###*++++++++++++++++****************######*+-.
+                              .....::--===========-:.:-----------=++**********++++++++==================++++++++******####*+++++++++++++*************##########+-:.
+                                              .   .:---------=========++***+++++===+================++++++++++++*****#####*++++++++++++************#######*+-:..
+                                                .:-=-------=========+++==========--++===============++++++++++*******####*++++++++++*****************+==:..
+                                               .-=================++++=+++=======----=+++***+++++++++++++++*******######**++++++++++++++++++++==--:. ..
+                                              .-==================++++=++++=======-=--==++++++++*****************#####%#*::::------:::::....
+                                             .-+++============+=+++++=++++++===========:..:==+++++++*+****************+-.
+                                            .-++++++=+++==++++++++++++++++++=+========:.    ..:-====++++++*******++=-.
+                                            .+++++++++++++++++++++++++++++++=+++=+==-.              ............
+                                           .:+++++++++++++++++++++++++++++++++++++=:.
+                                            :+++++*+++++++++++++++++++++++++++++=:.
+                                            .+++****************+++*+++*++++++=:.
+                                            .-++***********************++++=-:.
+                                             .-+*********************++==-:..
+                                              .-+****###*#********+==--:.
+                                                :=+**###***++===--::..
+                                                 ..:::::::::::...
+                                                     ......</pre>
+        </div>
+      </div>
+      </div>
+
+      <section class="panel">
+        <h2>Run</h2>
+        <dl id="meta-list" class="kv"></dl>
+        <h3>Gates</h3>
+        <dl id="gates-list" class="kv"></dl>
+        <h3>Fee assumptions</h3>
+        <p class="muted small">
+          Every edge figure is an <b>estimate</b> built on these assumptions, not
+          a quote. The same taker model (M=1, top of book) applies to all four
+          basket routes. Kalshi sets series-specific multipliers and charges maker
+          fees on some series; neither is modelled.
+        </p>
+        <dl id="fee-list" class="kv"></dl>
+        <h3>Score</h3>
+        <p class="mono small">
+          score = w × P(best edge) + P(best-edge route delta) + P(best route delta) + P(turnover)
+        </p>
+        <p class="muted small">
+          <b>w</b> is 4 when best edge is at least 1¢, and 2 otherwise.
+          <b>P</b> is that ticker's rank on the number inside, from 0 (lowest in this run) to 1 (highest). Only tickers that have all four numbers are ranked.
+          <b>Best edge</b> is cents per bundle on the best route, after the estimated fee.
+          <b>Best-edge route delta</b> is how much that same route's net moved since the previous snapshot. A rise ranks higher.
+          <b>Best route delta</b> is the largest rise among the four routes since the previous snapshot.
+          <b>Turnover</b> is the highest 24-hour volume divided by the highest open interest.
+        </p>
+      </section>
+    </div>
+
+    <section class="panel" id="watchlist-panel">
+      <h2>Watchlist</h2>
+      <p id="watchlist-empty" class="muted">No watchlist yet. A Lesser Cycle publishes one; a Greater Cycle leaves the last one in force.</p>
+      <table class="watchlist" id="watchlist-table" hidden>
+        <thead>
+          <tr>
+            <th class="num">#</th>
+            <th>event_ticker</th>
+            <th>title</th>
+            <th class="num">score</th>
+            <th class="num">best edge</th>
+            <th>best route</th>
+            <th class="num">edge %ile</th>
+            <th class="num">Best edge route delta to previous %ile</th>
+            <th class="num">Best route delta to previous %ile</th>
+            <th class="num">turnover %ile</th>
+          </tr>
+        </thead>
+        <tbody id="watchlist-body"></tbody>
+      </table>
+    </section>
+
+    <section class="panel" id="trader-panel">
+      <div class="trader-heading">
+        <h2>//Eye of the Algorithm</h2>
+        <span id="trader-state" class="muted">loading...</span>
+      </div>
+      <p class="muted small">
+        View only. Dry/live is set in <code>Core/.env</code>. The 5% annualized
+        gate and $10 unnetted cap per event ticker are arbitrary diversification choices.
+      </p>
+      <h3>Live edges</h3>
+      <p class="muted small">
+        Live annualized is from now and may differ from snapshot watchlist and
+        candidates edges.
+      </p>
+      <p id="live-edges-empty" class="muted">No live edge samples yet.</p>
+      <table class="live-edges" id="live-edges-table" hidden>
+        <thead>
+          <tr>
+            <th>event_ticker</th>
+            <th>route</th>
+            <th class="num">net / bundle</th>
+            <th class="num">annualized</th>
+            <th>eligible</th>
+            <th>last 30</th>
+          </tr>
+        </thead>
+        <tbody id="live-edges-body"></tbody>
+      </table>
+      <h3>Open inventory</h3>
+      <p id="shard-cash" class="muted small">Shard cash: not read yet</p>
+      <p id="inventory-empty" class="muted">No open inventory.</p>
+      <table class="inventory" id="inventory-table" hidden>
+        <thead>
+          <tr>
+            <th>event_ticker</th>
+            <th>route</th>
+            <th class="num">filled capital</th>
+            <th class="num">remaining</th>
+            <th>close time</th>
+            <th>legs</th>
+          </tr>
+        </thead>
+        <tbody id="inventory-body"></tbody>
+      </table>
+      <p class="muted small">
+        An empty ledger is filled once from the Kalshi account when the trader
+        starts. After that the file is the ledger. Filled capital stays
+        committed until close. Remaining is unused room on the per-event cap.
+        Shard cash on subaccount 0 is read from Kalshi about every 60 seconds.
+      </p>
+      <h3>Trade attempts</h3>
+      <p id="trader-empty" class="muted">No trade attempts logged.</p>
+      <table class="trader-log" id="trader-table" hidden>
+        <thead>
+          <tr>
+            <th>time (UTC)</th>
+            <th>mode</th>
+            <th>event_ticker</th>
+            <th>route</th>
+            <th class="num">bundles</th>
+            <th class="num">expected PnL</th>
+            <th class="num">capital locked</th>
+            <th class="num">annualized</th>
+            <th>lockup</th>
+            <th>fills / error</th>
+          </tr>
+        </thead>
+        <tbody id="trader-body"></tbody>
+      </table>
+    </section>
+
+    <section class="panel">
+      <div class="controls">
+        <input id="search" type="search" placeholder="search event_ticker or title" autocomplete="off">
+        <label for="sort-select" class="sr-only">Sort</label>
+        <div class="sort-menu" id="sort-menu">
+          <button type="button" id="sort-select" class="sort-menu-button" aria-haspopup="listbox" aria-expanded="false" aria-controls="sort-list">sell YES net &darr;</button>
+          <div id="sort-list" class="sort-menu-list" role="listbox" hidden>
+            <div role="option" id="sort-opt-buy-no-desc" data-value="buy_no_net:desc" aria-selected="false">buy NO net &darr;</div>
+            <div role="option" id="sort-opt-buy-no-asc" data-value="buy_no_net:asc" aria-selected="false">buy NO net &uarr;</div>
+            <div role="option" id="sort-opt-buy-yes-desc" data-value="buy_yes_net:desc" aria-selected="false">buy YES net &darr;</div>
+            <div role="option" id="sort-opt-buy-yes-asc" data-value="buy_yes_net:asc" aria-selected="false">buy YES net &uarr;</div>
+            <div role="option" id="sort-opt-sell-yes-desc" data-value="sell_yes_net:desc" aria-selected="true">sell YES net &darr;</div>
+            <div role="option" id="sort-opt-sell-yes-asc" data-value="sell_yes_net:asc" aria-selected="false">sell YES net &uarr;</div>
+            <div role="option" id="sort-opt-sell-no-desc" data-value="sell_no_net:desc" aria-selected="false">sell NO net &darr;</div>
+            <div role="option" id="sort-opt-sell-no-asc" data-value="sell_no_net:asc" aria-selected="false">sell NO net &uarr;</div>
+            <div role="option" id="sort-opt-volume-desc" data-value="max_volume:desc" aria-selected="false">max 24h volume &darr;</div>
+            <div role="option" id="sort-opt-volume-asc" data-value="max_volume:asc" aria-selected="false">max 24h volume &uarr;</div>
+            <div role="option" id="sort-opt-oi-desc" data-value="max_open_interest:desc" aria-selected="false">max open interest &darr;</div>
+            <div role="option" id="sort-opt-oi-asc" data-value="max_open_interest:asc" aria-selected="false">max open interest &uarr;</div>
+            <div role="option" id="sort-opt-bundles-desc" data-value="max_bundles:desc" aria-selected="false">max bundles &darr;</div>
+            <div role="option" id="sort-opt-bundles-asc" data-value="max_bundles:asc" aria-selected="false">max bundles &uarr;</div>
+            <div role="option" id="sort-opt-legs-desc" data-value="market_count:desc" aria-selected="false">legs &darr;</div>
+            <div role="option" id="sort-opt-legs-asc" data-value="market_count:asc" aria-selected="false">legs &uarr;</div>
+          </div>
+        </div>
+        <label for="min-edge-select" class="sr-only">Minimum best net edge</label>
+        <select id="min-edge-select">
+          <option value="">best net edge: any</option>
+          <option value="0">best net edge: &ge; 0c</option>
+          <option value="1">best net edge: &ge; 1c</option>
+          <option value="2">best net edge: &ge; 2c</option>
+          <option value="5">best net edge: &ge; 5c</option>
+        </select>
+        <span class="spacer"></span>
+        <span id="result-count" class="muted"></span>
+      </div>
+
+      <table class="candidates">
+        <thead>
+          <tr>
+            <th>event_ticker</th>
+            <th>title</th>
+            <th class="num">legs</th>
+            <th>close time</th>
+            <th class="num">max vol 24h</th>
+            <th class="num">max OI</th>
+            <th class="num" title="sell YES @ yes_bid on every leg. Visible figure is net after taker fees on one bundle; hover for gross.">Sell YES</th>
+            <th class="num" title="buy NO @ no_ask on every leg. Visible figure is net after taker fees on one bundle; hover for gross.">Buy NO</th>
+            <th class="num" title="buy YES @ yes_ask on every leg. Visible figure is net after taker fees on one bundle; hover for gross.">Buy YES</th>
+            <th class="num" title="sell NO @ no_bid on every leg. Visible figure is net after taker fees on one bundle; hover for gross.">Sell NO</th>
+            <th class="num" title="Highest of the four net-per-bundle figures. Used for sorting and the min-edge filter. Hover for that route's gross.">Best edge</th>
+            <th class="num" title="bundles executable at the thinnest top-of-book size of the best route">max bundles</th>
+          </tr>
+        </thead>
+        <tbody id="events-body"></tbody>
+      </table>
+
+      <div class="pager">
+        <button id="page-first" type="button">&laquo; first</button>
+        <button id="page-prev" type="button">&lsaquo; prev</button>
+        <span id="page-label" class="muted"></span>
+        <button id="page-next" type="button">next &rsaquo;</button>
+        <button id="page-last" type="button">last &raquo;</button>
+      </div>
+    </section>
+  </main>
+
+  <footer class="footer">
+    <span>// RESEARCH TOOL - NOT INVESTMENT ADVICE</span>
+  </footer>
+
+  <script src="/static/app.js"></script>
+</body>
+</html>

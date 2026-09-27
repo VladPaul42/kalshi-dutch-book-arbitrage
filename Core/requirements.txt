@@ -1,0 +1,19 @@
+# httpx: HTTP client. Chosen over requests because it accepts an ssl.SSLContext
+# directly for verify=, which is how truststore is wired in (see below).
+httpx>=0.27
+
+# cryptography: RSA-PSS SHA-256 request signing, required by the Kalshi API.
+cryptography>=42
+
+# truststore: verify TLS against the Windows certificate store. This machine has a
+# TLS-intercepting root certificate (antivirus/proxy) that lives in the OS store but
+# not in Python's certifi bundle, so without this every request dies with
+# CERTIFICATE_VERIFY_FAILED even though browsers and curl work fine.
+truststore>=0.9
+
+# python-dotenv: load .env, which holds the environment switch, credential file
+# PATHS (never key material), and the filter's gate thresholds.
+python-dotenv>=1.0
+
+# Authenticated ticker stream used by the long-running watchlist trader.
+websockets>=14

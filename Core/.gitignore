@@ -1,0 +1,10 @@
+# Real configuration, including paths to credential files. Never commit.
+.env
+
+# Snapshots and filter output. These are research data, not source, and the raw
+# archive gets large fast when you run the collector every 10 minutes.
+data/
+
+.venv/
+__pycache__/
+*.pyc
