@@ -286,7 +286,7 @@ main { padding: 16px 28px 40px; }
   font-size: 6px;
   font-size: min(calc(100cqw / 99), calc((100cqh - 4px) / 71));
   color: var(--muted);
-  opacity: 0.45;
+  opacity: 0.5;
   pointer-events: none;
   -webkit-user-select: none;
   user-select: none;
@@ -295,14 +295,14 @@ main { padding: 16px 28px 40px; }
    space. The percentage is of the flower's own width, so it scales with it. */
 .ascii-stage {
   position: relative;
-  --ascii-shift: 28%;
+  --ascii-shift: 15%;
 }
 .ascii-stage > .ascii-art { position: relative; z-index: 1; }
 .ascii-stage > .ascii-ghost {
   position: absolute;
   inset: 0;
   z-index: 0;
-  opacity: 0.12;
+  opacity: 0.25;
 }
 .ascii-ghost-left  { transform: translateX(calc(-1 * var(--ascii-shift))); }
 .ascii-ghost-right { transform: translateX(var(--ascii-shift)); }
