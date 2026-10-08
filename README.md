@@ -4,7 +4,7 @@ A scanner and execution engine for Dutch-book (basket) mispricings on [Kalshi](h
 
 Mutually exclusive means at most one market in the event can settle YES. A tournament winner, a game winner, a "which party" market: exactly one contract pays $1.00, so the legs' prices have a known relationship to 100 cents. When the top of the book violates that relationship by more than fees, the basket is a Dutch book. This project finds those baskets, shows why each name survived the filter, and (with dry mode off) trades them.
 
-![Filter funnel, run metadata, gates, and the score formula](ProjectMedia/funnel-and-run.png)
+![Filter funnel, run metadata, gates, and the score formula](ProjectMedia/funnel-and-run.png?v=20261008)
 
 ## The idea
 
