@@ -3,7 +3,7 @@
 A local web view of the research pipeline's filter output. It reads
 `candidates_*.json` files from `..\Core\data\candidates` and
 `watchlist_*.json` from `..\Core\data\watchlist`, and shows the filter
-funnel (including scoring gates), a top-N watchlist, a browsable table of
+funnel (including the 24h-volume scoring gate), a top-N watchlist, a browsable table of
 candidate event ladders, and an estimate of how mispriced each mutually
 exclusive ladder is across four basket trades.
 
@@ -171,11 +171,10 @@ venv that cannot be found is obvious at boot.
   current step. While idle it counts down to the next phase from the moment the
   previous cycle finished. There is no button: the loop starts with the server.
 - **Funnel** shows each gate the pipeline applied, how many events survived, and
-  the change from the previous stage. When a matching watchlist exists, the four
-  scoring gates (`best_edge`, best edge route delta, best route delta, turnover)
-  are appended after the snapshot gates.
+  the change from the previous stage. When a matching watchlist exists, the
+  `computable volume_24h` gate is appended after the snapshot gates.
 - **Watchlist** is the top N events from the latest Lesser Cycle: rank, ticker,
-  title, composite score, best edge, best route, and the four percentile ranks.
+  title, 24h volume, best edge, and best route. The volume is the score.
   A Greater Cycle does not publish one. If the selected run has no watchlist,
   the panel keeps showing the newest watchlist, which stays in force.
 - **Live watchlist trader** (under the watchlist) reads `Core/data/trader/status.json`,

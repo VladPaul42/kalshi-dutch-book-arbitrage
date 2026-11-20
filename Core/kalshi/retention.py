@@ -1,9 +1,8 @@
 """Keep the pinned Greater universe, the two newest quote snapshots, and one raw file.
 
-A Lesser Cycle compares the current snapshot with the one before it, and every
-Lesser reloads the Greater file for membership. Demo and production are pruned
-independently. The newest watchlist is always kept, so a Greater Cycle does not
-take the in-force list off disk.
+Every Lesser reloads the Greater file for membership. Demo and production are
+pruned independently. The newest watchlist is always kept, so a Greater Cycle
+does not take the in-force list off disk.
 """
 
 from __future__ import annotations
@@ -16,7 +15,7 @@ from pathlib import Path
 
 from kalshi.config import CANDIDATES_DIR, RAW_DIR, WATCHLIST_DIR, display_path
 
-# The current snapshot and the one it was compared against.
+# The two newest quote files. The pinned Greater universe is kept separately.
 KEEP_QUOTE_SNAPSHOTS_PER_ENV = 2
 KEEP_RAW_PER_ENV = 1
 

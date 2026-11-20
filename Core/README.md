@@ -158,9 +158,7 @@ no pause between markets on the batched path; the client backs off on HTTP 429.
 The same gates run again, starting from "candidate universe". Events that fail
 are omitted from this file only; the next Lesser reloads the Greater file, so
 a name can pass later. Writes `candidates_<env>_<UTC>.json` with
-`cycle_kind: lesser` and `previous_candidates` pointing at the comparison
-snapshot: the Greater file for the first Lesser, then the immediately previous
-Lesser.
+`cycle_kind: lesser`.
 
 ### 5. Fill NO sizes (manual only)
 
@@ -198,42 +196,21 @@ This endpoint is public, so unsigned reads work the same way as collect.
 
 Defaults to the newest file in `data/candidates`. Never calls the API. Refuses
 a Greater Cycle file, so that run cannot publish an empty watchlist. For each
-Lesser Cycle survivor it computes four features, drops the event if any feature
-is missing, percentile-ranks the survivors **within that file**, and writes
+Lesser Cycle survivor it takes `max(volume_24h_contracts)` across legs, drops
+the event when any leg is missing a volume or has a negative one, and writes
 `data/watchlist/watchlist_<env>_<snapshot UTC>.json`.
 
-The comparison snapshot is `previous_candidates` on the file: the Greater
-snapshot for the first Lesser, then the immediately previous Lesser.
-
-Features (raw → 0–1 percentile rank, higher = better):
-
-1. `best_edge` — `best_net_cents_per_bundle` after estimated taker fees, same
-   four routes as the dashboard. A route is priced only when every leg is
-   hittable (price in `(0, 100)` and size `> 0`). Null (no priced route)
-   excludes the event.
-2. `best_edge_route_delta` — this cycle's best-edge route net minus that same
-   route's net on the previous snapshot. An increase is better: −20¢ to −18¢
-   is +2¢, which ranks above a name that stayed at −10¢ (delta 0). Missing
-   that route on the previous snapshot excludes the event.
-3. `best_route_delta` — the largest route-net increase versus the previous
-   snapshot, whichever of the four routes that is. It does not have to be the
-   best-edge route. An increase is better. No route priced on both snapshots
-   excludes the event.
-4. `turnover_velocity` — `max(volume_24h_contracts) / max(open_interest_contracts)`
-   across legs. Missing values or `max(OI) <= 0` exclude the event.
-
-Score is a weighted sum of the four percentiles. Edge has weight 4 when net
-best edge is at least 1 cent, otherwise weight 2; the other three have weight 1.
-A qualifying row can reach 7; the others still top out at 5. The watchlist is the
-top `WATCHLIST_SIZE` (default 10).
+That maximum is the score. Zero is a valid score and ranks last. Ties break
+on `event_ticker`. Best edge and best route are stored beside the rank as
+labels; a missing quote does not drop the event. The watchlist is the top
+`WATCHLIST_SIZE` (default 10).
 
 After a **live** Greater filter or a **live** score, older pipeline files are
 removed. Per environment that keeps the newest Greater universe file, the two
-newest candidate snapshots (the current one and the one it was compared
-against), one raw snapshot, and watchlists whose candidates file is still
-retained. The newest watchlist is always kept, so a Greater Cycle leaves the
-last list in force. `python score.py --candidates` on an older file writes
-that watchlist and does not prune.
+newest candidate snapshots, one raw snapshot, and watchlists whose candidates
+file is still retained. The newest watchlist is always kept, so a Greater
+Cycle leaves the last list in force. `python score.py --candidates` on an
+older file writes that watchlist and does not prune.
 
 The dashboard runs this after each Lesser quote refresh, and does not run it
 after a Greater Cycle.

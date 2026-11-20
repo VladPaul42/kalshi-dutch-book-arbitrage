@@ -175,11 +175,7 @@ class ScoreConfig:
         return {
             "watchlist_size": self.watchlist_size,
             "cycle_idle_minutes": self.cycle_idle_minutes,
-            "score": (
-                "weighted sum of four within-pool percentile ranks "
-                "(edge 4 when net >= 1 cent, otherwise edge 2; "
-                "best edge route delta, best route delta, and turnover 1)"
-            ),
+            "score": "max volume_24h_contracts across the event's legs",
         }
 
 

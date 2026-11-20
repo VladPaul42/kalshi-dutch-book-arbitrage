@@ -1,7 +1,7 @@
 """Refresh prices and sizes for the pinned Greater Cycle universe.
 
     python refresh_quotes.py
-    python refresh_quotes.py --universe PATH --previous PATH
+    python refresh_quotes.py --universe PATH
 
 Starts from the newest Greater Cycle candidates file. Markets already on those
 events are refreshed in groups of 100: GET /markets?tickers=A,B,C (prices, YES
@@ -40,11 +40,7 @@ from kalshi.config import (
     load_filter_config,
 )
 from kalshi.fixedpoint import to_json
-from kalshi.retention import (
-    cycle_kind_of,
-    list_pipeline_files,
-    parse_pipeline_filename,
-)
+from kalshi.retention import cycle_kind_of, list_pipeline_files
 
 QUOTE_BATCH_SIZE = 100
 
@@ -81,26 +77,6 @@ def newest_greater() -> Path:
         f"No Greater Cycle universe file in {display_path(CANDIDATES_DIR)}.\n"
         f"Run 'python collect.py' and 'python filter_candidates.py' first."
     )
-
-
-def previous_snapshot(universe: Path) -> Path:
-    """The snapshot this Lesser is compared against.
-
-    The first Lesser after a Greater uses the Greater file. Each later Lesser
-    uses the newest candidates file stamped after that Greater file, which is
-    the immediately previous Lesser.
-    """
-    universe_row = parse_pipeline_filename(universe.name)
-    if universe_row is None:
-        return universe
-    for row in list_pipeline_files(CANDIDATES_DIR, "candidates"):
-        if row.environment != universe_row.environment:
-            continue
-        if row.path.resolve() == universe.resolve():
-            continue
-        if row.stamp > universe_row.stamp:
-            return row.path
-    return universe
 
 
 def write_atomic(path: Path, payload: dict[str, Any]) -> None:
@@ -304,15 +280,6 @@ def main() -> int:
         default=None,
         help="Greater Cycle candidates file. Defaults to the newest one.",
     )
-    parser.add_argument(
-        "--previous",
-        type=Path,
-        default=None,
-        help=(
-            "Snapshot this file is compared against. Defaults to the newest "
-            "Lesser after the universe, or the universe itself for the first Lesser."
-        ),
-    )
     args = parser.parse_args()
 
     universe_path = args.universe or newest_greater()
@@ -326,11 +293,6 @@ def main() -> int:
             f"(cycle_kind={universe.get('cycle_kind')!r}).",
             file=sys.stderr,
         )
-        return 1
-
-    previous_path = args.previous or previous_snapshot(universe_path)
-    if not previous_path.is_file():
-        print(f"No such previous snapshot: {previous_path}", file=sys.stderr)
         return 1
 
     file_env = universe.get("environment")
@@ -352,7 +314,6 @@ def main() -> int:
 
     print_banner(config)
     print(f"Universe    : {display_path(universe_path)}")
-    print(f"Previous    : {display_path(previous_path)}")
     print(f"Events      : {len(universe.get('events') or [])}")
     print(f"Fetching {QUOTE_SOURCE} ...")
     print()
@@ -393,7 +354,6 @@ def main() -> int:
         "quantity_unit": "contracts, decimal string, fractional to 0.01",
         "cycle_kind": "lesser",
         "universe_candidates": universe_path.name,
-        "previous_candidates": previous_path.name,
         "sizes_source": QUOTE_SOURCE,
         "quotes_refreshed_at_utc": captured,
         "quotes_markets_fetched": fetched,

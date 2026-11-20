@@ -4,11 +4,11 @@ A scanner and execution engine for Dutch-book (basket) mispricings on [Kalshi](h
 
 Mutually exclusive means at most one market in the event can settle YES. A tournament winner, a game winner, a "which party" market: exactly one contract pays $1.00, so the legs' prices have a known relationship to 100 cents. When the top of the book violates that relationship by more than fees, the basket is a Dutch book. This project finds those baskets, shows why each name survived the filter, and (with dry mode off) trades them.
 
-![Filter funnel, run metadata, gates, and the score formula](ProjectMedia/funnel-and-run.png?v=20261008)
+![Filter funnel, run metadata, gates, and the score formula](ProjectMedia/funnel-and-run.png?v=20261120)
 
 ## The idea
 
-Four full-bundle routes follow from "at most one leg settles YES." Every number the dashboard and the trader show is **net of estimated taker fees**. Gross is never the figure that ranks a name or fires an order.
+Four full-bundle routes follow from "at most one leg settles YES." Every edge the dashboard and the trader show is **net of estimated taker fees**. Gross is never the figure that fires an order.
 
 | Route | Action | Gross (cents / 1 bundle) | Size bottleneck |
 | --- | --- | --- | --- |
@@ -19,7 +19,7 @@ Four full-bundle routes follow from "at most one leg settles YES." Every number 
 
 A route is priced only when every leg is hittable: price strictly between 0 and 100 cents, and resting size greater than 0. `0` and `100` are empty-book sentinels. **NO prices are never inferred from YES.** A missing field stays null, and that route is skipped.
 
-The watchlist score is a weighted sum of four within-snapshot percentile ranks: best after-fee edge, how much that same route moved since the previous snapshot, the largest route-net increase on any of the four routes, and turnover (24h volume over open interest). Edge is weighted 4 when the best net is at least 1 cent, otherwise 2. The other three features have weight 1.
+The watchlist score is the busiest leg's 24-hour volume, `max(volume_24h_contracts)`. A missing or negative volume on any leg keeps the event out of the ranking. Best edge and best route are labels beside that rank. The trader still sends a basket only when the after-fee edge clears its return gate.
 
 ## Architecture
 
@@ -52,7 +52,7 @@ flowchart LR
 
 The watchlist is the top of the scored Lesser Cycle. Under it, the trader quotes each name from the live book and shows annualized return from now until the earliest leg close. Eligibility is a display of the same gates the trader uses before it will send a clip.
 
-![Watchlist and live WebSocket edges](ProjectMedia/watchlist-live-edges.png)
+![Watchlist and live WebSocket edges](ProjectMedia/watchlist-live-edges.png?v=20261120)
 
 Trade attempts are the last fills the trader recorded: route, bundles, expected P&L, capital locked, annualized return, and time until the position can settle. The table below is the full candidate universe for the selected run, with per-leg bids and asks.
 

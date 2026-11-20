@@ -155,16 +155,11 @@ python score.py</pre>
         </p>
         <dl id="fee-list" class="kv"></dl>
         <h3>Score</h3>
-        <p class="mono small">
-          score = w × P(best edge) + P(best-edge route delta) + P(best route delta) + P(turnover)
-        </p>
+        <p class="mono small">score = max(volume_24h_contracts)</p>
         <p class="muted small">
-          <b>w</b> is 4 when best edge is at least 1¢, and 2 otherwise.
-          <b>P</b> is that ticker's rank on the number inside, from 0 (lowest in this run) to 1 (highest). Only tickers that have all four numbers are ranked.
-          <b>Best edge</b> is cents per bundle on the best route, after the estimated fee.
-          <b>Best-edge route delta</b> is how much that same route's net moved since the previous snapshot. A rise ranks higher.
-          <b>Best route delta</b> is the largest rise among the four routes since the previous snapshot.
-          <b>Turnover</b> is the highest 24-hour volume divided by the highest open interest.
+          The score is the busiest leg's 24-hour volume, in contracts.
+          A missing or negative volume on any leg keeps the event out of the ranking.
+          Best edge and best route are labels beside the rank.
         </p>
       </section>
     </div>
@@ -178,13 +173,9 @@ python score.py</pre>
             <th class="num">#</th>
             <th>event_ticker</th>
             <th>title</th>
-            <th class="num">score</th>
+            <th class="num">24h volume</th>
             <th class="num">best edge</th>
             <th>best route</th>
-            <th class="num">edge %ile</th>
-            <th class="num">Best edge route delta to previous %ile</th>
-            <th class="num">Best route delta to previous %ile</th>
-            <th class="num">turnover %ile</th>
           </tr>
         </thead>
         <tbody id="watchlist-body"></tbody>

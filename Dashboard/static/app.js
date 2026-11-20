@@ -785,8 +785,7 @@ function renderWatchlist(watchlist) {
     dom.watchlistTable.hidden = true;
     if (watchlist && typeof watchlist.scoreable_count === "number") {
       dom.watchlistEmpty.textContent =
-        `No events passed the four scoring gates (${watchlist.scoreable_count} scoreable). ` +
-        `Route-net deltas need this snapshot and the previous one.`;
+        `No events had a usable 24h volume (${watchlist.scoreable_count} scoreable).`;
     } else {
       dom.watchlistEmpty.textContent =
         "No watchlist yet. A Lesser Cycle publishes one; a Greater Cycle leaves the last one in force.";
@@ -802,13 +801,9 @@ function renderWatchlist(watchlist) {
         el("td", { class: "num", text: row.rank != null ? String(row.rank) : "-" }),
         el("td", { class: "ticker-cell", text: row.event_ticker || "-" }),
         el("td", { class: "title-cell", text: row.title || "" }),
-        el("td", { class: "num", text: fmtPrice(row.score) }),
+        el("td", { class: "num", text: fmtQty(row.score) }),
         el("td", { class: "num", text: fmtCents(row.best_edge) }),
         el("td", {}, [routeId ? routeTag(routeId) : el("span", { text: "-" })]),
-        el("td", { class: "num", text: fmtPrice(row.percentile_best_edge) }),
-        el("td", { class: "num", text: fmtPrice(row.percentile_best_edge_route_delta) }),
-        el("td", { class: "num", text: fmtPrice(row.percentile_best_route_delta) }),
-        el("td", { class: "num", text: fmtPrice(row.percentile_turnover_velocity) }),
       ])
     );
   }

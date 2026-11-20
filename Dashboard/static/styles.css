@@ -399,7 +399,6 @@ table.candidates { min-width: 1280px; }
   background: linear-gradient(90deg, var(--muted), var(--bright));
 }
 
-table.watchlist { min-width: 1280px; }
 #watchlist-empty { margin: 0; }
 
 /* Key/value blocks ------------------------------------------------------- */

@@ -4,12 +4,12 @@
     python score.py --candidates PATH       # a specific one
     python score.py --top 10
 
-Never calls the API. Reads a Lesser Cycle candidates file and the snapshot
-named in ``previous_candidates``, and writes
+Never calls the API. Reads a Lesser Cycle candidates file and writes
 data/watchlist/watchlist_{env}_{stamp}.json.
 
-An event cannot enter the watchlist unless all four features are computable.
-A Greater Cycle universe file is refused, so the last watchlist stays in force.
+The score is the busiest leg's 24-hour volume. An event whose volume is
+missing or negative stays out of the ranking. A Greater Cycle universe file
+is refused, so the last watchlist stays in force.
 
 After a live score (the newest same-environment candidates file) retention
 keeps the pinned Greater file, the two newest quote snapshots, and the
@@ -36,18 +36,12 @@ from kalshi.config import (
     load_score_config,
 )
 from kalshi.fixedpoint import to_decimal
-from kalshi.mispricing import ROUTE_IDS, quote_best_edge, route_nets
+from kalshi.mispricing import quote_best_edge
 from kalshi.retention import (
     is_live_candidates_file,
     print_prune_result,
     prune_rolling_window,
 )
-
-_RANK_QUANTUM = Decimal("0.00000001")
-# Net cents per bundle at which the edge percentile is weighted more heavily.
-_EDGE_WEIGHT_NET_CENTS = Decimal(1)
-_EDGE_WEIGHT = Decimal(2)
-_EDGE_WEIGHT_AT_NET_FLOOR = Decimal(4)
 
 
 # --- loading --------------------------------------------------------------
@@ -87,29 +81,6 @@ def load_candidates(path: Path) -> dict[str, Any]:
     return payload
 
 
-def events_by_ticker(payload: dict[str, Any]) -> dict[str, dict[str, Any]]:
-    indexed: dict[str, dict[str, Any]] = {}
-    for event in payload.get("events") or []:
-        if not isinstance(event, dict):
-            continue
-        ticker = event.get("event_ticker")
-        if not isinstance(ticker, str) or not ticker:
-            continue
-        indexed[ticker] = event
-    return indexed
-
-
-def load_previous_events(current: dict[str, Any]) -> dict[str, dict[str, Any]]:
-    """Events from the snapshot this file names as its comparison reference."""
-    name = current.get("previous_candidates")
-    if not isinstance(name, str) or not name or Path(name).name != name:
-        return {}
-    path = CANDIDATES_DIR / name
-    if not path.is_file():
-        return {}
-    return events_by_ticker(load_candidates(path))
-
-
 # --- features -------------------------------------------------------------
 
 
@@ -119,145 +90,33 @@ def _fmt(value: Decimal | None) -> str | None:
     return format(value, "f")
 
 
-def _fmt_rank(value: Decimal) -> str:
-    return format(value.quantize(_RANK_QUANTUM), "f")
+def volume_24h(event: dict[str, Any]) -> Decimal | None:
+    """Largest ``volume_24h_contracts`` across legs.
 
-
-def best_edge_route_delta(
-    current_event: dict[str, Any], previous_event: dict[str, Any] | None
-) -> Decimal | None:
-    """This cycle's best-edge route net, minus that same route's previous net.
-
-    An increase is better: -20¢ to -18¢ is +2¢. None when this cycle has no
-    best route, or that route was not priced on the previous snapshot.
+    None when the event has no markets, a market is not an object, or any leg
+    is missing a volume or has a negative one. Zero is a usable score.
     """
-    if previous_event is None:
-        return None
-    quoted = quote_best_edge(current_event)
-    if quoted.route_id is None or quoted.net_per_bundle is None:
-        return None
-    previous_net = route_nets(previous_event).get(quoted.route_id)
-    if previous_net is None:
-        return None
-    return quoted.net_per_bundle - previous_net
-
-
-def best_route_delta(
-    current_event: dict[str, Any], previous_event: dict[str, Any] | None
-) -> Decimal | None:
-    """Largest route-net increase versus the previous snapshot, any route.
-
-    The route does not have to be the best-edge route. An increase is better.
-    None when no route is priced on both snapshots.
-    """
-    if previous_event is None:
-        return None
-    current_nets = route_nets(current_event)
-    previous_nets = route_nets(previous_event)
-    best: Decimal | None = None
-    for route_id in ROUTE_IDS:
-        now = current_nets.get(route_id)
-        then = previous_nets.get(route_id)
-        if now is None or then is None:
-            continue
-        delta = now - then
-        if best is None or delta > best:
-            best = delta
-    return best
-
-
-def turnover_velocity(event: dict[str, Any]) -> Decimal | None:
-    """max(volume_24h) / max(open_interest) across legs. None if the ratio is unusable."""
-    volumes: list[Decimal] = []
-    interests: list[Decimal] = []
     markets = event.get("markets") or []
     if not markets:
         return None
+    volumes: list[Decimal] = []
     for market in markets:
         if not isinstance(market, dict):
             return None
         volume = to_decimal(market.get("volume_24h_contracts"))
-        interest = to_decimal(market.get("open_interest_contracts"))
-        if volume is None or interest is None or volume < 0 or interest < 0:
+        if volume is None or volume < 0:
             return None
         volumes.append(volume)
-        interests.append(interest)
-    max_interest = max(interests)
-    if max_interest <= 0:
-        return None
-    return max(volumes) / max_interest
-
-
-# --- ranking --------------------------------------------------------------
-
-
-def percentile_ranks(values: list[Decimal]) -> list[Decimal]:
-    """0-1 percentile ranks, higher raw value → higher rank. Average ranks for ties."""
-    n = len(values)
-    if n == 0:
-        return []
-    if n == 1:
-        return [Decimal(1)]
-
-    order = sorted(range(n), key=lambda index: values[index])
-    ranks = [Decimal(0)] * n
-    index = 0
-    while index < n:
-        end = index
-        while end + 1 < n and values[order[end + 1]] == values[order[index]]:
-            end += 1
-        average = Decimal(index + end) / Decimal(2)
-        for cursor in range(index, end + 1):
-            ranks[order[cursor]] = average
-        index = end + 1
-    denom = Decimal(n - 1)
-    return [rank / denom for rank in ranks]
+    return max(volumes)
 
 
 def score_rows(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    """Attach within-pool percentiles and a weighted-sum score, then rank.
-
-    Edge percentile has weight 4 when net best edge is at least 1 cent,
-    otherwise weight 2. The two route-net deltas and turnover have weight 1.
-    A qualifying row can reach 7; the others still top out at 5.
-    """
+    """Rank by 24-hour volume, highest first. Ties break on event ticker."""
     if not rows:
         return []
-
-    features = (
-        "best_edge",
-        "best_edge_route_delta",
-        "best_route_delta",
-        "turnover_velocity",
-    )
-    percentiles = {
-        name: percentile_ranks([row[name] for row in rows]) for name in features
-    }
-    scored: list[dict[str, Any]] = []
-    for index, row in enumerate(rows):
-        parts = [percentiles[name][index] for name in features]
-        edge_weight = (
-            _EDGE_WEIGHT_AT_NET_FLOOR
-            if row["best_edge"] >= _EDGE_WEIGHT_NET_CENTS
-            else _EDGE_WEIGHT
-        )
-        score = edge_weight * parts[0] + parts[1] + parts[2] + parts[3]
-        scored.append(
-            {
-                **row,
-                "percentile_best_edge": parts[0],
-                "percentile_best_edge_route_delta": parts[1],
-                "percentile_best_route_delta": parts[2],
-                "percentile_turnover_velocity": parts[3],
-                "score": score,
-            }
-        )
-    scored.sort(
-        key=lambda row: (
-            -row["score"],
-            -row["best_edge"],
-            str(row["event_ticker"] or ""),
-        )
+    scored = sorted(
+        rows,
+        key=lambda row: (-row["score"], str(row["event_ticker"] or "")),
     )
     for rank, row in enumerate(scored, start=1):
         row["rank"] = rank
@@ -271,14 +130,7 @@ def serialise_event(row: dict[str, Any]) -> dict[str, Any]:
         "title": row["title"],
         "best_route": row["best_route"],
         "best_edge": _fmt(row["best_edge"]),
-        "best_edge_route_delta": _fmt(row["best_edge_route_delta"]),
-        "best_route_delta": _fmt(row["best_route_delta"]),
-        "turnover_velocity": _fmt(row["turnover_velocity"]),
-        "percentile_best_edge": _fmt_rank(row["percentile_best_edge"]),
-        "percentile_best_edge_route_delta": _fmt_rank(row["percentile_best_edge_route_delta"]),
-        "percentile_best_route_delta": _fmt_rank(row["percentile_best_route_delta"]),
-        "percentile_turnover_velocity": _fmt_rank(row["percentile_turnover_velocity"]),
-        "score": _fmt_rank(row["score"]),
+        "score": _fmt(row["score"]),
     }
 
 
@@ -336,7 +188,6 @@ def score_candidates(
             "Refusing to score a Greater Cycle universe file. "
             "The last watchlist stays in force."
         )
-    compared = load_previous_events(current)
 
     events = [event for event in (current.get("events") or []) if isinstance(event, dict)]
     funnel = snapshot_funnel(current)
@@ -346,55 +197,23 @@ def score_candidates(
         else len(events)
     )
 
-    with_edge: list[dict[str, Any]] = []
+    scoreable_raw: list[dict[str, Any]] = []
     for event in events:
-        quoted = quote_best_edge(event)
-        if quoted.net_per_bundle is None:
+        volume = volume_24h(event)
+        if volume is None:
             continue
-        with_edge.append(
+        quoted = quote_best_edge(event)
+        scoreable_raw.append(
             {
-                "event": event,
                 "event_ticker": event.get("event_ticker"),
                 "title": event.get("title"),
                 "best_route": quoted.route_id,
                 "best_edge": quoted.net_per_bundle,
+                "score": volume,
             }
         )
-    previous_count = append_gate(
-        funnel, "computable best_edge", len(with_edge), previous_count
-    )
-
-    with_edge_delta: list[dict[str, Any]] = []
-    for row in with_edge:
-        edge_delta = best_edge_route_delta(row["event"], compared.get(row["event_ticker"]))
-        if edge_delta is None:
-            continue
-        with_edge_delta.append({**row, "best_edge_route_delta": edge_delta})
-    previous_count = append_gate(
-        funnel,
-        "computable best_edge_route_delta",
-        len(with_edge_delta),
-        previous_count,
-    )
-
-    with_route_delta: list[dict[str, Any]] = []
-    for row in with_edge_delta:
-        route_delta = best_route_delta(row["event"], compared.get(row["event_ticker"]))
-        if route_delta is None:
-            continue
-        with_route_delta.append({**row, "best_route_delta": route_delta})
-    previous_count = append_gate(
-        funnel, "computable best_route_delta", len(with_route_delta), previous_count
-    )
-
-    scoreable_raw: list[dict[str, Any]] = []
-    for row in with_route_delta:
-        velocity = turnover_velocity(row["event"])
-        if velocity is None:
-            continue
-        scoreable_raw.append({**row, "turnover_velocity": velocity})
     append_gate(
-        funnel, "computable turnover_velocity", len(scoreable_raw), previous_count
+        funnel, "computable volume_24h", len(scoreable_raw), previous_count
     )
 
     ranked = score_rows(scoreable_raw)
@@ -408,7 +227,6 @@ def score_candidates(
         "source_snapshot_captured_at_utc": current.get("source_snapshot_captured_at_utc"),
         "environment": current.get("environment"),
         "scored_at_utc": datetime.now(timezone.utc).isoformat(timespec="seconds"),
-        "previous_candidates": current.get("previous_candidates"),
         "cycle_kind": current.get("cycle_kind"),
         "watchlist_size": config.watchlist_size,
         "scoreable_count": len(ranked),
@@ -426,17 +244,14 @@ def score_candidates(
 def print_watchlist(rows: list[dict[str, Any]]) -> None:
     if not rows:
         print()
-        print(
-            "Watchlist is empty. Route-net deltas need this snapshot and the "
-            "previous one, plus a computable best edge and turnover."
-        )
+        print("Watchlist is empty. Every event was missing a usable 24h volume.")
         return
     print()
     print(f"Watchlist (top {len(rows)}):")
     for row in rows:
         print(
-            f"  {row['rank']:>2}  score {row['score']:<12}  "
-            f"edge {row['best_edge']:<12}  {row['event_ticker']}  "
+            f"  {row['rank']:>2}  24h vol {row['score']:<14}  "
+            f"edge {row['best_edge'] or '-':<12}  {row['event_ticker']}  "
             f"{(row.get('title') or '')[:48]}"
         )
 
@@ -445,8 +260,8 @@ def main() -> int:
     enable_utf8_stdout()
     parser = argparse.ArgumentParser(
         description=(
-            "Score snapshot-filtered candidates and write a top-N watchlist. "
-            "Reads files only; never calls the API."
+            "Score snapshot-filtered candidates by 24h volume and write a "
+            "top-N watchlist. Reads files only; never calls the API."
         )
     )
     parser.add_argument(
